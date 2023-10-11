@@ -127,6 +127,7 @@ class Transformer(nn.Module):
         loss = F.cross_entropy(logits, targets)
         return logits, loss
     
+    @torch.no_grad()
     def predict(self, x: torch.Tensor) -> torch.Tensor:
         logits, _ = self.forward(x)
         return logits.argmax(dim=-1).view(-1)

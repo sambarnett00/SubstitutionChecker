@@ -1,5 +1,6 @@
 import torch
 from torch.amp import autocast
+from argparse import ArgumentParser
 from tqdm import tqdm
 from os import makedirs, environ
 from os.path import join, exists
@@ -32,23 +33,23 @@ class LRScheduler:
             return self.peak_lr / (self.current_step ** 0.5)
 
 
-def main():
+def train(ckpt_name: str):
     torch.manual_seed(1337) ## karpathy's seed
     load_dotenv(".env")
     config = Config(
         vocab_size=26,
         n_classes=2,
-        batch_size=64,
-        context_length=64,
-        d_model=384,
-        n_head=6,
-        n_layer=3,
+        batch_size=128,
+        context_length=512,
+        d_model=24,
+        n_head=3,
+        n_layer=2,
         dropout=0.2,
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     )
     
-    max_iter = 10000
-    ckpt_period = 512
+    max_iter = 2048
+    ckpt_period = 1024
     ckpt_path = environ["CKPT_PATH"]
     
     transformer = Transformer(config).to(config.device)
@@ -76,13 +77,14 @@ def main():
         
         if i % ckpt_period == 0: ## save checkpoint
             checkpoint = {
+                "config": config,
                 "model": transformer.state_dict(),
                 "optimizer": optimizer.state_dict(),
                 "lr_step": lr_scheduler.current_step,
             }
-            if not exists(ckpt_path):
-                makedirs(ckpt_path)
-            torch.save(checkpoint, join(ckpt_path, f"train{i}.pt"))
+            if not exists(join(ckpt_path, ckpt_name)):
+                makedirs(join(ckpt_path, ckpt_name))
+            torch.save(checkpoint, join(ckpt_path, ckpt_name, f"train{i}.pt"))
         
         if i > max_iter:
             break
@@ -90,4 +92,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    argparser = ArgumentParser(prog="train.py",
+                description="Train a Transformer model to detect substituted text.")
+    argparser.add_argument("-c", "--ckpt-name", type=str, default="ckpt",
+                           help="checkpoint name")
+    args = argparser.parse_args()
+    train(args.ckpt_name)

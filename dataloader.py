@@ -28,34 +28,21 @@ class DataLoader:
         self._train_test_split = train_test_split
 
         eng_raw, sub_raw = DataLoader.read_raw(eng_src, sub_str)
-        self._eng, self._sub = DataLoader.tokenize(eng_raw, sub_raw)
-        self._length = self._eng.size(0)
-        self._lower_bound, self._upper_bound = self._get_bounds()
+        eng_split, sub_split = DataLoader.split(eng_raw, sub_raw, training, train_test_split)
+        self._length = len(eng_split)
+        self._eng, self._sub = DataLoader.tokenize(eng_split, sub_split)
 
     def __iter__(self):
         return self
 
     def __next__(self) -> tuple[torch.Tensor, torch.Tensor]:
-        """Returns a batch of data"""
-        ix = torch.randint(self._lower_bound, self._upper_bound, (self._batch_size//2,))
+        """Returns a random batch of data"""
+        ix = torch.randint(0, self._length-self._context_length, (self._batch_size//2,))
         batch_x = torch.stack([self._eng[i:i+self._context_length] for i in ix] + [self._sub[i:i+self._context_length] for i in ix])
         batch_y = torch.zeros(self._batch_size, dtype=torch.long)
         batch_y[self._batch_size//2:] = 1
-        # batch_y[self._batch_size//2:, 1] = 1
 
         return batch_x.to(self._device), batch_y.to(self._device)
-
-    
-    def set_training(self, training: bool) -> None:
-        self._training = training
-        self._lower_bound, self._upper_bound = self._get_bounds()
-    
-    def _get_bounds(self):
-        """Calculates the lower and upper bounds for the data to be used when creating a batch"""
-        if self._training:  # 0 -> 0.9
-            return 0, int(self._length * self._train_test_split - self._context_length)
-        else:               # 0.9 -> 1
-            return int(self._length * self._train_test_split), int(self._length - self._context_length)
 
     @staticmethod
     def read_raw(eng_src: str, sub_src: str) -> tuple[str, str]:
@@ -67,9 +54,14 @@ class DataLoader:
         return eng_raw, sub_raw
     
     @staticmethod
+    def split(eng_raw: str, sub_raw: str, training: bool, train_test_split: float) -> tuple[str, str]:
+        mid = int(len(eng_raw) * train_test_split)
+        if training: return eng_raw[:mid], sub_raw[:mid]
+        else: return eng_raw[mid:], sub_raw[mid:]
+    
+    @staticmethod
     def tokenize(eng_raw: str, sub_raw: str) -> tuple[torch.Tensor, torch.Tensor]:
         print("tokenizing...")
-        eng, sub = torch.zeros(len(eng_raw), dtype=torch.long), torch.zeros(len(sub_raw), dtype=torch.long)
         eng = torch.tensor([ord(c) - 97 for c in eng_raw])
         sub = torch.tensor([ord(c) - 97 for c in sub_raw])
         return eng, sub
